@@ -8,7 +8,8 @@ import '../components/cat_spawner.dart';
 import '../components/glass_container.dart';
 
 class LiquidCatGame extends Forge2DGame {
-  LiquidCatGame() : super(gravity: Vector2(0, 25));
+  LiquidCatGame()
+    : super(gravity: Vector2(0, 100000.0), zoom: 1.0); // 중력 10배 증가
 
   late final GlassContainer _glassContainer;
   late final CatSpawner _catSpawner;
@@ -24,6 +25,7 @@ class LiquidCatGame extends Forge2DGame {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    camera.viewfinder.anchor = Anchor.topLeft;
     _glassContainer = GlassContainer();
     await add(_glassContainer);
 
@@ -37,8 +39,8 @@ class LiquidCatGame extends Forge2DGame {
     _processMergeQueue();
   }
 
-  void spawnCat(int level, Vector2 position) {
-    add(CatBody(level: level, initialPosition: position));
+  void spawnCat(int level, Vector2 position, {double? dropSpeed}) {
+    add(CatBody(level: level, initialPosition: position, dropSpeed: dropSpeed));
   }
 
   void queueMerge(CatBody a, CatBody b) {

@@ -11,15 +11,20 @@ import '../game/liquid_cat_game.dart';
 
 class CatBody extends BodyComponent<LiquidCatGame>
     with ContactCallbacks, HasGameRef<LiquidCatGame> {
-  CatBody({required this.level, required Vector2 initialPosition})
-    : assert(level >= 1 && level <= 11, 'level must be within 1-11'),
-      _initialPosition = initialPosition.clone();
+  CatBody({
+    required this.level,
+    required Vector2 initialPosition,
+    double? dropSpeed,
+  }) : assert(level >= 1 && level <= 11, 'level must be within 1-11'),
+       _initialPosition = initialPosition.clone(),
+       _dropSpeed = dropSpeed;
 
   final int level;
   final Vector2 _initialPosition;
+  final double? _dropSpeed;
 
-  static const double _baseRadius = 18;
-  static const double _radiusStep = 4;
+  static const double _baseRadius = 20.0;
+  static const double _radiusStep = 4.0;
 
   double get radius => _baseRadius + (level - 1) * _radiusStep;
 
@@ -30,7 +35,7 @@ class CatBody extends BodyComponent<LiquidCatGame>
   late final Sprite _baseSprite;
   Sprite? _blinkSprite;
   SpriteComponent? _sprite;
-  bool _isSquashing = false;
+  // bool _isSquashing = false;  // 더 이상 사용하지 않음
   ScaleEffect? _breathingEffect;
   bool _isMerging = false;
   bool _isRemoved = false;
@@ -44,12 +49,11 @@ class CatBody extends BodyComponent<LiquidCatGame>
     await super.onLoad();
     renderBody = false;
 
-    final basePath = 'images/cat_${level.toString().padLeft(2, '0')}.png';
+    final basePath = 'cat_${level.toString().padLeft(2, '0')}.png';
     _baseSprite = Sprite(await gameRef.images.load(basePath));
 
     if (_shouldBlink) {
-      final blinkPath =
-          'images/cat_${level.toString().padLeft(2, '0')}_blink.png';
+      final blinkPath = 'cat_${level.toString().padLeft(2, '0')}_blink.png';
       _blinkSprite = Sprite(await gameRef.images.load(blinkPath));
     }
 
@@ -62,6 +66,17 @@ class CatBody extends BodyComponent<LiquidCatGame>
 
     add(_sprite!);
     _applyIdleEffects();
+
+    // 빠른 드롭 속도 설정 (0.5초 내 바닥 도달)
+    final dropSpeed = _dropSpeed;
+    if (dropSpeed != null) {
+      final container = gameRef.glassContainer.containerBounds;
+      final distanceToBottom = container.bottom - _initialPosition.y;
+      // 0.5초 안에 떨어지도록 초기 속도 설정
+      // 10배 빠른 낙하를 위해 30배 가속 적용
+      final targetVelocity = distanceToBottom / dropSpeed * 30.0;
+      body.linearVelocity = Vector2(0, targetVelocity);
+    }
   }
 
   @override
@@ -69,14 +84,17 @@ class CatBody extends BodyComponent<LiquidCatGame>
     final shape = CircleShape()..radius = radius;
 
     final fixtureDef = FixtureDef(shape)
-      ..density = 0.8
-      ..friction = 0.25
-      ..restitution = 0.35;
+      ..density =
+          25.0 // 밀도 증가로 겹침 방지
+      ..friction =
+          0.6 // 마찰력 증가
+      ..restitution = 0.05; // 튕김 감소
 
     final bodyDef = BodyDef()
       ..type = BodyType.dynamic
       ..position = _initialPosition
-      ..linearDamping = 0.2
+      ..linearDamping =
+          0.005 // 감쇠 거의 제거 (10배 빠른 낙하)
       ..angularDamping = 2.0
       ..userData = this;
 
@@ -87,7 +105,11 @@ class CatBody extends BodyComponent<LiquidCatGame>
   @override
   void beginContact(Object other, Contact contact) {
     super.beginContact(other, contact);
-    _playSquashEffect();
+
+    // 충돌 시 찌그러지는 효과 제거 (꾸깃꾸깃한 효과 방지)
+    // if (body.linearVelocity.length > 0.5) {
+    //   _playSquashEffect();
+    // }
 
     if (other is CatBody) {
       gameRef.queueMerge(this, other);
@@ -97,39 +119,55 @@ class CatBody extends BodyComponent<LiquidCatGame>
   @override
   void update(double dt) {
     super.update(dt);
+
+    final velocity = body.linearVelocity.length;
+    final isAtRest = velocity < 0.5;
+
+    // 정지 상태일 때만 숨쉬기 효과 적용
     if (_shouldBreathe) {
-      _updateIdleBreathing();
+      if (isAtRest) {
+        if (_breathingEffect == null ||
+            (_breathingEffect?.isRemoved ?? false)) {
+          _startIdleBreathing();
+        }
+      } else {
+        if (_breathingEffect != null) {
+          _stopIdleBreathing();
+        }
+      }
     }
+
     if (_shouldBlink) {
       _blinkTimer?.update(dt);
       _blinkHoldTimer?.update(dt);
     }
   }
 
-  void _playSquashEffect() {
-    final sprite = _sprite;
-    if (sprite == null || _isSquashing) {
-      return;
-    }
+  // 충돌 시 찌그러지는 효과 제거됨 (꾸깃꾸깃한 효과 방지)
+  // void _playSquashEffect() {
+  //   final sprite = _sprite;
+  //   if (sprite == null || _isSquashing) {
+  //     return;
+  //   }
 
-    _isSquashing = true;
-    final squashSequence = SequenceEffect([
-      ScaleEffect.to(
-        Vector2(1.2, 0.8),
-        EffectController(duration: 0.08, curve: Curves.easeOut),
-      ),
-      ScaleEffect.to(
-        Vector2(0.9, 1.1),
-        EffectController(duration: 0.1, curve: Curves.easeOut),
-      ),
-      ScaleEffect.to(
-        Vector2.all(1.0),
-        EffectController(duration: 0.1, curve: Curves.easeOutBack),
-      ),
-    ], onComplete: () => _isSquashing = false);
+  //   _isSquashing = true;
+  //   final squashSequence = SequenceEffect([
+  //     ScaleEffect.to(
+  //       Vector2(1.2, 0.8),
+  //       EffectController(duration: 0.08, curve: Curves.easeOut),
+  //     ),
+  //     ScaleEffect.to(
+  //       Vector2(0.9, 1.1),
+  //       EffectController(duration: 0.1, curve: Curves.easeOut),
+  //     ),
+  //     ScaleEffect.to(
+  //       Vector2.all(1.0),
+  //       EffectController(duration: 0.1, curve: Curves.easeOutBack),
+  //     ),
+  //   ], onComplete: () => _isSquashing = false);
 
-    sprite.add(squashSequence);
-  }
+  //   sprite.add(squashSequence);
+  // }
 
   bool get _shouldBlink => level == 9 || level == 10;
   bool get _shouldBreathe => level <= 8 || !_shouldBlink;
@@ -179,11 +217,12 @@ class CatBody extends BodyComponent<LiquidCatGame>
       return;
     }
 
+    // 아주 미세한 숨쉬기 효과 (1% 크기 변화)
     final effect = ScaleEffect.to(
-      Vector2.all(1.02),
+      Vector2.all(1.01),
       EffectController(
-        duration: 1.4,
-        reverseDuration: 1.4,
+        duration: 2.0,
+        reverseDuration: 2.0,
         infinite: true,
         curve: Curves.easeInOut,
       ),
@@ -198,31 +237,31 @@ class CatBody extends BodyComponent<LiquidCatGame>
     _sprite?.scale = Vector2.all(1.0);
   }
 
-  void _updateIdleBreathing() {
-    final currentBody = body;
-    if (currentBody == null) {
-      return;
-    }
+  // 더이상 사용하지 않음 - update()에서 직접 처리
+  // void _updateIdleBreathing() {
+  //   final velocity = body.linearVelocity.length;
+  //   final isAtRest = velocity < 0.5;
 
-    final isIdle = currentBody.linearVelocity.length2 < 5.0;
-    if (isIdle) {
-      if (_breathingEffect == null || (_breathingEffect?.isRemoved ?? false)) {
-        _startIdleBreathing();
-      }
-    } else {
-      if (_breathingEffect != null) {
-        _stopIdleBreathing();
-      }
-    }
-  }
+  //   if (isAtRest) {
+  //     if (_breathingEffect != null) {
+  //       _stopIdleBreathing();
+  //     }
+  //   } else {
+  //     final isIdle = velocity < 2.0;
+  //     if (isIdle) {
+  //       if (_breathingEffect == null ||
+  //           (_breathingEffect?.isRemoved ?? false)) {
+  //         _startIdleBreathing();
+  //       }
+  //     } else {
+  //       if (_breathingEffect != null) {
+  //         _stopIdleBreathing();
+  //       }
+  //     }
+  //   }
+  // }
 
-  Vector2 get worldCenter {
-    final currentBody = body;
-    if (currentBody == null) {
-      return _initialPosition.clone();
-    }
-    return currentBody.worldCenter.clone();
-  }
+  Vector2 get worldCenter => body.worldCenter.clone();
 
   bool get isMerging => _isMerging;
 

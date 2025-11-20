@@ -9,13 +9,14 @@ import '../game/liquid_cat_game.dart';
 import 'cat_body.dart';
 
 class CatSpawner extends PositionComponent
-    with HasGameRef<LiquidCatGame>, DragCallbacks {
+    with HasGameRef<LiquidCatGame>, DragCallbacks, TapCallbacks {
   CatSpawner();
 
   final math.Random _random = math.Random();
   int? _nextLevel;
   Vector2? _currentPosition;
   bool _canSpawn = true;
+  bool _isDragging = false;
   double _containerLeft = 0;
   double _containerRight = 0;
   double _spawnY = 0;
@@ -41,7 +42,16 @@ class CatSpawner extends PositionComponent
     final container = gameRef.glassContainer.containerBounds;
     _containerLeft = container.left;
     _containerRight = container.right;
-    _spawnY = container.top + 80;
+    
+    // 컨테이너 상단에 고양이 위치
+    // 고양이 하단이 컨테이너 상단에 닿도록 하려면 중심이 반지름만큼 아래에 있어야 함
+    if (_nextLevel != null) {
+      final radius = CatBody.radiusForLevel(_nextLevel!);
+      _spawnY = container.top + radius;
+    } else {
+      // 기본값 (나중에 업데이트됨)
+      _spawnY = container.top + 20;
+    }
 
     final centerX = (container.left + container.right) / 2;
     _currentPosition = Vector2(centerX, _spawnY);
@@ -58,17 +68,26 @@ class CatSpawner extends PositionComponent
     _nextLevel = _random.nextInt(3) + 1;
     final radius = CatBody.radiusForLevel(_nextLevel!);
     size = Vector2.all(radius * 2);
-    final spritePath =
-        'images/cat_${_nextLevel!.toString().padLeft(2, '0')}.png';
+    final spritePath = 'cat_${_nextLevel!.toString().padLeft(2, '0')}.png';
     final spriteImage = await gameRef.images.load(spritePath);
     _previewCat
       ..sprite = Sprite(spriteImage)
       ..size = size.clone()
       ..position = Vector2.zero();
+    
+    // 고양이 크기에 맞춰 위치 업데이트
+    _updateSpawnBounds();
+  }
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    _isDragging = true;
   }
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
+    super.onDragUpdate(event);
     if (!_canSpawn || _nextLevel == null) return;
 
     final newX = event.canvasEndPosition.x;
@@ -84,7 +103,17 @@ class CatSpawner extends PositionComponent
 
   @override
   void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    _isDragging = false;
     if (!_canSpawn || _nextLevel == null || _currentPosition == null) return;
+    _spawnCat();
+  }
+
+  @override
+  void onTapUp(TapUpEvent event) {
+    super.onTapUp(event);
+    if (!_canSpawn || _nextLevel == null || _currentPosition == null) return;
+    if (_isDragging) return;
 
     _spawnCat();
   }
@@ -94,7 +123,7 @@ class CatSpawner extends PositionComponent
     final level = _nextLevel!;
     final spawnPos = _currentPosition!.clone();
 
-    gameRef.spawnCat(level, spawnPos);
+    gameRef.spawnCat(level, spawnPos, dropSpeed: 0.5);
 
     _previewCat..sprite = null;
     _nextLevel = null;
@@ -126,8 +155,9 @@ class CatSpawner extends PositionComponent
     if (_currentPosition == null) return;
 
     final container = gameRef.glassContainer.containerBounds;
-    final startY = _spawnY + size.y / 2 + 10;
-    final endY = container.bottom;
+    // 스폰어 위치에서 컨테이너 바닥까지의 가이드라인
+    final startY = size.y / 2;
+    final endY = container.bottom - _spawnY + size.y / 2;
 
     final linePaint = Paint()
       ..color = Colors.orange.withOpacity(0.4)
@@ -140,10 +170,10 @@ class CatSpawner extends PositionComponent
 
     while (currentY < endY) {
       canvas.drawLine(
-        Offset(size.x / 2, currentY - _spawnY + size.y / 2),
+        Offset(size.x / 2, currentY),
         Offset(
           size.x / 2,
-          (currentY + dashWidth).clamp(startY, endY) - _spawnY + size.y / 2,
+          (currentY + dashWidth).clamp(startY, endY),
         ),
         linePaint,
       );

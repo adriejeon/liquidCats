@@ -39,10 +39,14 @@ class GlassContainer extends Component with HasGameRef<LiquidCatGame> {
       return;
     }
 
-    final width = gameSize.x * 0.65;
-    final height = gameSize.y * 0.7;
+    // EvolutionBar 공간을 고려하여 컨테이너 위치 조정
+    const double evolutionBarHeight = 100.0;
+    const double containerHeight = 500.0;
+    final width = gameSize.x * 0.8;
+    final height = containerHeight;
     final left = (gameSize.x - width) / 2;
-    final top = gameSize.y * 0.15;
+    // 상단 여유 공간과 하단 EvolutionBar 공간을 고려
+    final top = (gameSize.y - height - evolutionBarHeight) / 2;
     _containerRect = ui.Rect.fromLTWH(left, top, width, height);
 
     _backgroundLayer.updateLayout(_containerRect, gameSize);
@@ -60,11 +64,17 @@ class GlassContainer extends Component with HasGameRef<LiquidCatGame> {
     final radius = ui.Radius.circular(rect.width * 0.12);
     final glassRect = ui.RRect.fromRectAndRadius(rect.deflate(6), radius);
 
+    // 컨테이너 배경색 (반투명 흰색)
+    final backgroundPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.white.withOpacity(0.3);
+    canvas.drawRRect(glassRect, backgroundPaint);
+
+    // 내부 테두리
     final innerSheenPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
-      ..color = Colors.white.withOpacity(0.08);
-
+      ..color = Colors.white.withOpacity(0.2);
     canvas.drawRRect(glassRect, innerSheenPaint);
   }
 
@@ -72,13 +82,24 @@ class GlassContainer extends Component with HasGameRef<LiquidCatGame> {
     final radius = ui.Radius.circular(rect.width * 0.12);
     final outline = ui.RRect.fromRectAndRadius(rect, radius);
 
+    // 외곽 테두리 (더 진하게)
     final outlinePaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
+      ..color = const Color(0xFF8B7355).withOpacity(0.6)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
+      ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round;
 
     canvas.drawRRect(outline, outlinePaint);
+    
+    // 내부 하이라이트 테두리
+    final innerOutlinePaint = Paint()
+      ..color = Colors.white.withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+    
+    final innerOutline = ui.RRect.fromRectAndRadius(rect.deflate(2), radius);
+    canvas.drawRRect(innerOutline, innerOutlinePaint);
 
     final highlightPath = ui.Path()
       ..moveTo(rect.left + rect.width * 0.12, rect.top + rect.height * 0.08)
@@ -151,15 +172,11 @@ class GlassWalls extends BodyComponent<LiquidCatGame> {
 
   void updateContainer(ui.Rect rect) {
     _containerRect = rect;
-    final currentBody = body;
-    if (currentBody == null) {
-      return;
-    }
-    final fixtures = currentBody.fixtures.toList();
+    final fixtures = body.fixtures.toList();
     for (final fixture in fixtures) {
-      currentBody.destroyFixture(fixture);
+      body.destroyFixture(fixture);
     }
-    _applyFixtures(currentBody);
+    _applyFixtures(body);
   }
 
   void _applyFixtures(Body targetBody) {
@@ -182,8 +199,8 @@ class GlassWalls extends BodyComponent<LiquidCatGame> {
       width: wallThickness,
       height: extendedHeight,
       center: Vector2(
-        _containerRect.left - wallThickness / 2,
-        _containerRect.center.dy + wallThickness * 0.2,
+        _containerRect.left + wallThickness / 2,
+        _containerRect.center.dy,
       ),
     );
 
@@ -192,8 +209,8 @@ class GlassWalls extends BodyComponent<LiquidCatGame> {
       width: wallThickness,
       height: extendedHeight,
       center: Vector2(
-        _containerRect.right + wallThickness / 2,
-        _containerRect.center.dy + wallThickness * 0.2,
+        _containerRect.right - wallThickness / 2,
+        _containerRect.center.dy,
       ),
     );
   }
