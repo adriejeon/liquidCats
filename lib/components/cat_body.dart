@@ -43,6 +43,7 @@ class CatBody extends BodyComponent<LiquidCatGame>
   Timer? _blinkTimer;
   Timer? _blinkHoldTimer;
   bool _isBlinking = false;
+  bool _hasContacted = false;
 
   @override
   Future<void> onLoad() async {
@@ -67,49 +68,49 @@ class CatBody extends BodyComponent<LiquidCatGame>
     add(_sprite!);
     _applyIdleEffects();
 
-    // 빠른 드롭 속도 설정 (0.5초 내 바닥 도달)
-    final dropSpeed = _dropSpeed;
-    if (dropSpeed != null) {
-      final container = gameRef.glassContainer.containerBounds;
-      final distanceToBottom = container.bottom - _initialPosition.y;
-      // 0.5초 안에 떨어지도록 초기 속도 설정
-      // 10배 빠른 낙하를 위해 30배 가속 적용
-      final targetVelocity = distanceToBottom / dropSpeed * 30.0;
-      body.linearVelocity = Vector2(0, targetVelocity);
-    }
+    // ★★★ [치트키] 강제 속도 주입 ★★★
+    // 중력이 약해도, 시작하자마자 초속 1500으로 내리꽂습니다.
+    // 이러면 0.3초 만에 바닥에 닿습니다.
+    body.linearVelocity = Vector2(0, 1500.0);
   }
 
-  @override
+@override
   Body createBody() {
     final shape = CircleShape()..radius = radius;
 
     final fixtureDef = FixtureDef(shape)
-      ..density =
-          25.0 // 밀도 증가로 겹침 방지
-      ..friction =
-          0.6 // 마찰력 증가
-      ..restitution = 0.05; // 튕김 감소
+      ..density = 1.0      // [변경] 가볍게 1.0 (무거우면 떨림 발생)
+      ..restitution = 0.0  // 튀지 않음
+      ..friction = 0.3;    // 마찰력 적당히 
 
     final bodyDef = BodyDef()
       ..type = BodyType.dynamic
       ..position = _initialPosition
-      ..linearDamping =
-          0.005 // 감쇠 거의 제거 (10배 빠른 낙하)
-      ..angularDamping = 2.0
+      ..fixedRotation = false // 회전 허용
+      ..bullet = true         // 빠른 충돌 감지
+      ..linearDamping = 0.0   // 떨어질 땐 저항 없음
+      ..angularDamping = 5.0  // 구르기 저항
       ..userData = this;
 
-    final body = world.createBody(bodyDef)..createFixture(fixtureDef);
-    return body;
+    return world.createBody(bodyDef)..createFixture(fixtureDef);
   }
 
-  @override
+
+@override
   void beginContact(Object other, Contact contact) {
     super.beginContact(other, contact);
-
-    // 충돌 시 찌그러지는 효과 제거 (꾸깃꾸깃한 효과 방지)
-    // if (body.linearVelocity.length > 0.5) {
-    //   _playSquashEffect();
-    // }
+    
+    // [핵심 로직] 무언가(벽, 바닥, 다른 고양이)와 닿는 순간!
+    if (!_hasContacted) {
+      _hasContacted = true;
+      
+      // 1. 이동 저항을 0.5 -> 3.0으로 부드럽게 증가 (안정적인 안착)
+      // 급격한 변화를 줄여서 떨림 방지
+      body.linearDamping = 3.0; 
+      
+      // 2. 회전 저항도 적당히 올려서 안정화
+      body.angularDamping = 10.0;
+    }
 
     if (other is CatBody) {
       gameRef.queueMerge(this, other);
@@ -119,6 +120,14 @@ class CatBody extends BodyComponent<LiquidCatGame>
   @override
   void update(double dt) {
     super.update(dt);
+
+    // ★★★ [강제 진정제] ★★★
+    // 고양이가 거의 멈췄다 싶으면(속도가 10 이하), 강제로 속도를 0으로 만듭니다.
+    // 미세한 떨림을 아예 코드단에서 삭제해버리는 기술입니다.
+    if (body.linearVelocity.length < 10.0) {
+      body.linearVelocity = Vector2.zero();
+      body.angularVelocity = 0;
+    }
 
     final velocity = body.linearVelocity.length;
     final isAtRest = velocity < 0.5;

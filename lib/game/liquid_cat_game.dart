@@ -8,9 +8,9 @@ import '../components/cat_spawner.dart';
 import '../components/glass_container.dart';
 
 class LiquidCatGame extends Forge2DGame {
-  LiquidCatGame()
-    : super(gravity: Vector2(0, 100000.0), zoom: 1.0); // 중력 10배 증가
-
+  // [핵심 변경] 중력을 1000 ~ 2000 사이로 아주 낮춥니다.
+  // "쌓여있을 때의 안정성"을 위해서입니다.
+LiquidCatGame() : super(gravity: Vector2(0, 1000.0), zoom: 1.0);
   late final GlassContainer _glassContainer;
   late final CatSpawner _catSpawner;
   final List<_MergeRequest> _mergeQueue = [];
@@ -24,8 +24,15 @@ class LiquidCatGame extends Forge2DGame {
 
   @override
   Future<void> onLoad() async {
+    // [핵심 수정] 정밀도 설정을 여기서 합니다.
+    // world.physicsWorld... 가 아니라 게임 클래스의 속성을 직접 변경합니다.
+    // velocityIterations = 20; // 충돌 계산 정밀도 높임 (떨림 방지)
+    // positionIterations = 10; // 위치 계산 정밀도 높임 (겹침 방지)
+
     await super.onLoad();
+    
     camera.viewfinder.anchor = Anchor.topLeft;
+    
     _glassContainer = GlassContainer();
     await add(_glassContainer);
 
@@ -44,12 +51,8 @@ class LiquidCatGame extends Forge2DGame {
   }
 
   void queueMerge(CatBody a, CatBody b) {
-    if (a == b || a.level != b.level) {
-      return;
-    }
-    if (a.isRemoved || b.isRemoved || a.isMerging || b.isMerging) {
-      return;
-    }
+    if (a == b || a.level != b.level) return;
+    if (a.isRemoved || b.isRemoved || a.isMerging || b.isMerging) return;
 
     if (a.level >= 11) {
       a.markMerging();
@@ -63,9 +66,7 @@ class LiquidCatGame extends Forge2DGame {
   }
 
   void _processMergeQueue() {
-    if (_mergeQueue.isEmpty) {
-      return;
-    }
+    if (_mergeQueue.isEmpty) return;
     final pending = List<_MergeRequest>.from(_mergeQueue);
     _mergeQueue.clear();
     for (final request in pending) {
@@ -77,15 +78,9 @@ class LiquidCatGame extends Forge2DGame {
     final a = request.a;
     final b = request.b;
 
-    if (!a.isMounted || !b.isMounted) {
-      return;
-    }
-    if (a.isRemoved || b.isRemoved || a.isMerging || b.isMerging) {
-      return;
-    }
-    if (a.level != b.level) {
-      return;
-    }
+    if (!a.isMounted || !b.isMounted) return;
+    if (a.isRemoved || b.isRemoved || a.isMerging || b.isMerging) return;
+    if (a.level != b.level) return;
 
     if (a.level >= 11) {
       a.markMerging();
