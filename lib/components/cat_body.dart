@@ -68,48 +68,52 @@ class CatBody extends BodyComponent<LiquidCatGame>
     add(_sprite!);
     _applyIdleEffects();
 
-    // ★★★ [치트키] 강제 속도 주입 ★★★
-    // 중력이 약해도, 시작하자마자 초속 1500으로 내리꽂습니다.
-    // 이러면 0.3초 만에 바닥에 닿습니다.
-    body.linearVelocity = Vector2(0, 1500.0);
+    // ★★★ [초기 발사] ★★★
+    // 매 프레임(update)마다가 아니라, 태어날 때 '딱 한 번' 강하게 밀어줍니다.
+    // 이것만 있으면 충분히 빠릅니다.
+    body.linearVelocity = Vector2(0, 2000.0);
   }
 
-@override
+  @override
   Body createBody() {
     final shape = CircleShape()..radius = radius;
 
     final fixtureDef = FixtureDef(shape)
-      ..density = 1.0      // [변경] 가볍게 1.0 (무거우면 떨림 발생)
-      ..restitution = 0.0  // 튀지 않음
-      ..friction = 0.3;    // 마찰력 적당히 
+      ..density =
+          5.0 // [변경] 1.0은 너무 가벼워서 뜹니다. 5.0으로 무게감 줌.
+      ..restitution =
+          0.0 // 튀지 않음
+      ..friction = 0.5; // 적당한 마찰력
 
     final bodyDef = BodyDef()
       ..type = BodyType.dynamic
       ..position = _initialPosition
-      ..fixedRotation = false // 회전 허용
-      ..bullet = true         // 빠른 충돌 감지
-      ..linearDamping = 0.0   // 떨어질 땐 저항 없음
-      ..angularDamping = 5.0  // 구르기 저항
+      ..fixedRotation = false
+      ..bullet = true
+      // ★★★ [핵심] 공기 저항 0.0 (낙하산 제거) ★★★
+      // 이 값이 0이어야 중력 가속도를 제대로 받아 빨라집니다.
+      ..linearDamping = 0.0
+      ..angularDamping = 5.0
       ..userData = this;
 
     return world.createBody(bodyDef)..createFixture(fixtureDef);
   }
 
-
-@override
+  @override
   void beginContact(Object other, Contact contact) {
     super.beginContact(other, contact);
-    
-    // [핵심 로직] 무언가(벽, 바닥, 다른 고양이)와 닿는 순간!
+
+    // 바닥이나 다른 고양이에 닿는 순간!
     if (!_hasContacted) {
       _hasContacted = true;
-      
-      // 1. 이동 저항을 0.5 -> 3.0으로 부드럽게 증가 (안정적인 안착)
-      // 급격한 변화를 줄여서 떨림 방지
-      body.linearDamping = 3.0; 
-      
-      // 2. 회전 저항도 적당히 올려서 안정화
-      body.angularDamping = 10.0;
+
+      // [변신] 이제 얌전해져라!
+      // 저항을 높여서 그 자리에 멈추게 합니다.
+      body.linearDamping = 20.0;
+      body.angularDamping = 20.0;
+
+      // 마찰력을 높여서 미끄러짐 방지
+      body.fixtures.first.friction = 1.0;
     }
 
     if (other is CatBody) {
@@ -121,14 +125,14 @@ class CatBody extends BodyComponent<LiquidCatGame>
   void update(double dt) {
     super.update(dt);
 
-    // ★★★ [강제 진정제] ★★★
-    // 고양이가 거의 멈췄다 싶으면(속도가 10 이하), 강제로 속도를 0으로 만듭니다.
-    // 미세한 떨림을 아예 코드단에서 삭제해버리는 기술입니다.
-    if (body.linearVelocity.length < 10.0) {
-      body.linearVelocity = Vector2.zero();
-      body.angularVelocity = 0;
-    }
+    // ❌ 중요: 여기에 있던 'body.linearVelocity = ...' 코드를 전부 지웠습니다!
+    // update에서 속도를 건드리면 물리 엔진과 충돌하여 버벅거립니다.
 
+    // (숨쉬기 효과 등 비주얼 관련 코드만 남김)
+    _applyAnimationLogic(dt);
+  }
+
+  void _applyAnimationLogic(double dt) {
     final velocity = body.linearVelocity.length;
     final isAtRest = velocity < 0.5;
 
@@ -270,7 +274,21 @@ class CatBody extends BodyComponent<LiquidCatGame>
   //   }
   // }
 
-  Vector2 get worldCenter => body.worldCenter.clone();
+  Vector2 get worldCenter {
+    if (!isMounted) {
+      return _initialPosition.clone();
+    }
+    try {
+      final center = body.worldCenter;
+      // NaN이나 Infinity 체크
+      if (center.x.isFinite && center.y.isFinite) {
+        return center.clone();
+      }
+    } catch (e) {
+      // Body가 제거되었거나 접근할 수 없는 경우
+    }
+    return _initialPosition.clone();
+  }
 
   bool get isMerging => _isMerging;
 
@@ -278,6 +296,7 @@ class CatBody extends BodyComponent<LiquidCatGame>
     _isMerging = true;
   }
 
+  @override
   bool get isRemoved => _isRemoved;
 
   @override

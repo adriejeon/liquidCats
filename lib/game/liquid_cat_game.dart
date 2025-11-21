@@ -8,9 +8,10 @@ import '../components/cat_spawner.dart';
 import '../components/glass_container.dart';
 
 class LiquidCatGame extends Forge2DGame {
-  // [핵심 변경] 중력을 1000 ~ 2000 사이로 아주 낮춥니다.
-  // "쌓여있을 때의 안정성"을 위해서입니다.
-LiquidCatGame() : super(gravity: Vector2(0, 1000.0), zoom: 1.0);
+  // [수정] 중력을 3,000으로 설정합니다.
+  // 너무 높으면(5만, 10만) 뚫고 지나가고, 너무 낮으면 느립니다.
+  // 3,000 ~ 5,000 사이가 황금비율입니다.
+  LiquidCatGame() : super(gravity: Vector2(0, 3000.0), zoom: 1.0);
   late final GlassContainer _glassContainer;
   late final CatSpawner _catSpawner;
   final List<_MergeRequest> _mergeQueue = [];
@@ -30,9 +31,9 @@ LiquidCatGame() : super(gravity: Vector2(0, 1000.0), zoom: 1.0);
     // positionIterations = 10; // 위치 계산 정밀도 높임 (겹침 방지)
 
     await super.onLoad();
-    
+
     camera.viewfinder.anchor = Anchor.topLeft;
-    
+
     _glassContainer = GlassContainer();
     await add(_glassContainer);
 
@@ -82,22 +83,29 @@ LiquidCatGame() : super(gravity: Vector2(0, 1000.0), zoom: 1.0);
     if (a.isRemoved || b.isRemoved || a.isMerging || b.isMerging) return;
     if (a.level != b.level) return;
 
-    if (a.level >= 11) {
+    // update()는 World가 잠겨있지 않을 때 호출되므로 안전하게 처리 가능
+    // 하지만 안전을 위해 try-catch로 감싸기
+    try {
+      if (a.level >= 11) {
+        a.markMerging();
+        b.markMerging();
+        _removeCats(a, b);
+        _addScore(5000);
+        return;
+      }
+
       a.markMerging();
       b.markMerging();
+
+      final midpoint = (a.worldCenter + b.worldCenter)..scale(0.5);
+
       _removeCats(a, b);
-      _addScore(5000);
-      return;
+      spawnCat(a.level + 1, midpoint);
+      _addScore((a.level + 1) * 120);
+    } catch (e) {
+      // World가 잠겨있거나 Body가 제거된 경우 다음 프레임에 다시 시도
+      _mergeQueue.add(request);
     }
-
-    a.markMerging();
-    b.markMerging();
-
-    final midpoint = (a.worldCenter + b.worldCenter)..scale(0.5);
-
-    _removeCats(a, b);
-    spawnCat(a.level + 1, midpoint);
-    _addScore((a.level + 1) * 120);
   }
 
   void _removeCats(CatBody a, CatBody b) {
