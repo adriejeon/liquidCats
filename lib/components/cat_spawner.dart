@@ -42,7 +42,7 @@ class CatSpawner extends PositionComponent
     final container = gameRef.glassContainer.containerBounds;
     _containerLeft = container.left;
     _containerRight = container.right;
-    
+
     // 컨테이너 상단에 고양이 위치
     // 고양이 하단이 컨테이너 상단에 닿도록 하려면 중심이 반지름만큼 아래에 있어야 함
     if (_nextLevel != null) {
@@ -53,7 +53,9 @@ class CatSpawner extends PositionComponent
       _spawnY = container.top + 20;
     }
 
-    final centerX = (container.left + container.right) / 2;
+    // 화면 중앙 X 좌표 계산 (컨테이너 중앙이 아니라 화면 전체 중앙)
+    final gameSize = gameRef.size;
+    final centerX = gameSize.x / 1.8;
     _currentPosition = Vector2(centerX, _spawnY);
     position = _currentPosition!;
   }
@@ -74,7 +76,7 @@ class CatSpawner extends PositionComponent
       ..sprite = Sprite(spriteImage)
       ..size = size.clone()
       ..position = Vector2.zero();
-    
+
     // 고양이 크기에 맞춰 위치 업데이트
     _updateSpawnBounds();
   }
@@ -125,7 +127,7 @@ class CatSpawner extends PositionComponent
 
     gameRef.spawnCat(level, spawnPos, dropSpeed: 0.5);
 
-    _previewCat..sprite = null;
+    _previewCat.sprite = null;
     _nextLevel = null;
 
     Future.delayed(const Duration(milliseconds: 500), () async {
@@ -146,7 +148,9 @@ class CatSpawner extends PositionComponent
     final glowPaint = Paint()
       ..color = Colors.orange.withOpacity(0.25)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawCircle(Offset(radius, radius), radius + 10, glowPaint);
+    // anchor = Anchor.center이므로 로컬 좌표계의 중심은 (0, 0)
+    // 후광을 중심에 그리기 위해 (0, 0) 사용
+    canvas.drawCircle(Offset.zero, radius + 10, glowPaint);
 
     _drawGuideLine(canvas);
   }
@@ -156,7 +160,9 @@ class CatSpawner extends PositionComponent
 
     final container = gameRef.glassContainer.containerBounds;
     // 스폰어 위치에서 컨테이너 바닥까지의 가이드라인
-    final startY = size.y / 2;
+    // anchor = Anchor.center이므로 로컬 좌표계의 중심은 (0, 0)
+    // 아래쪽으로 그리므로 startY는 0부터 시작
+    final startY = 0.0;
     final endY = container.bottom - _spawnY + size.y / 2;
 
     final linePaint = Paint()
@@ -170,11 +176,8 @@ class CatSpawner extends PositionComponent
 
     while (currentY < endY) {
       canvas.drawLine(
-        Offset(size.x / 2, currentY),
-        Offset(
-          size.x / 2,
-          (currentY + dashWidth).clamp(startY, endY),
-        ),
+        Offset(0, currentY), // 중심 X는 0
+        Offset(0, (currentY + dashWidth).clamp(startY, endY)),
         linePaint,
       );
       currentY += dashWidth + dashSpace;

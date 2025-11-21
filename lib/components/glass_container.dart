@@ -41,9 +41,9 @@ class GlassContainer extends Component with HasGameRef<LiquidCatGame> {
 
     // EvolutionBar 공간을 고려하여 컨테이너 위치 조정
     const double evolutionBarHeight = 100.0;
-    const double containerHeight = 500.0;
-    final width = gameSize.x * 0.8;
-    final height = containerHeight;
+    // 컨테이너 높이를 화면의 50%로 설정
+    final height = gameSize.y * 0.5;
+    final width = gameSize.x * 1.0;
     final left = (gameSize.x - width) / 2;
     // 상단 여유 공간과 하단 EvolutionBar 공간을 고려
     final top = (gameSize.y - height - evolutionBarHeight) / 2;
@@ -90,14 +90,14 @@ class GlassContainer extends Component with HasGameRef<LiquidCatGame> {
       ..strokeCap = StrokeCap.round;
 
     canvas.drawRRect(outline, outlinePaint);
-    
+
     // 내부 하이라이트 테두리
     final innerOutlinePaint = Paint()
       ..color = Colors.white.withOpacity(0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
-    
+
     final innerOutline = ui.RRect.fromRectAndRadius(rect.deflate(2), radius);
     canvas.drawRRect(innerOutline, innerOutlinePaint);
 
